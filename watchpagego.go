@@ -11,7 +11,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 func linesInFile(fileName string) []string {
@@ -50,9 +52,10 @@ func getRespCodeAndSiteData(site string) (int, string) {
 	return respCode, respData
 }
 
-func getHashFromData(respData string) string {
+func getHashFromData(text string) string {
+	// take text get hash
 	h := md5.New()
-	h.Write([]byte(respData))
+	h.Write([]byte(text))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -65,7 +68,22 @@ func main() {
 		hashedData := getHashFromData(respData)
 		outputFile := strCode + "_" + hashedData
 
-		fmt.Printf("%d_%s_%s_%s\n", respCode, strCode, hashedData, outputFile)
+		cwd, err := os.Getwd()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		tmpsiteName := strings.Replace(site, ":", "", -1)
+		siteName := strings.Replace(tmpsiteName, "/", "_", -1)
+
+		targetDir := filepath.Join(cwd, siteName)
+		targetPath := filepath.Join(targetDir, outputFile)
+
+		if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+			os.Mkdir(targetDir, os.ModeDir)
+		}
+
+		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetPath)
 
 	}
 }
