@@ -2,9 +2,10 @@ package main
 
 import (
 	"bufio"
-	//"fmt"
-	"io"
-	//	"io/ioutil"
+	"fmt"
+	//"io"
+	"crypto/tls"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -29,7 +30,10 @@ func LinesInFile(fileName string) []string {
 }
 
 func main() {
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
 	fileName := `list`
+
 	for _, line := range LinesInFile(fileName) {
 		response, err := http.Get(line)
 		if err != nil {
@@ -38,11 +42,12 @@ func main() {
 
 		defer response.Body.Close()
 
-		n, err := io.Copy(os.Stdout, response.Body)
+		httpResponseData, err := ioutil.ReadAll(response.Body)
 		if err != nil {
 			log.Fatal(err)
 		}
+		responseBody := string(httpResponseData)
 
-		log.Println("bytes:", n)
+		fmt.Printf("%s", responseBody)
 	}
 }
