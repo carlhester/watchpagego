@@ -35,7 +35,7 @@ func linesInFile(fileName string) []string {
 	return result
 }
 
-func getRespCodeAndSiteData(site string) (int, string) {
+func getRespCodeAndSiteData(site string) (string, string) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	// Fetches a site and returns response code and data
 	response, err := http.Get(site)
@@ -49,8 +49,9 @@ func getRespCodeAndSiteData(site string) (int, string) {
 		log.Fatal(err)
 	}
 	respCode := int(response.StatusCode)
+	strCode := strconv.Itoa(respCode)
 	respData := string(httpResponseData)
-	return respCode, respData
+	return strCode, respData
 }
 
 func getHashFromData(text string) string {
@@ -60,12 +61,18 @@ func getHashFromData(text string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+func checkError(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
 func main() {
 	fileName := `list`
 
 	for _, site := range linesInFile(fileName) {
-		respCode, respData := getRespCodeAndSiteData(site)
-		strCode := strconv.Itoa(respCode)
+		strCode, respData := getRespCodeAndSiteData(site)
 		hashedData := getHashFromData(respData)
 		outputFile := strCode + "_" + hashedData
 
@@ -104,7 +111,7 @@ func main() {
 
 		}
 
-		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFilePath)
+		//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFilePath)
 
 	}
 }
