@@ -12,8 +12,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
-	"strings"
+	//"strings"
 )
 
 func linesInFile(fileName string) []string {
@@ -73,17 +74,37 @@ func main() {
 			log.Fatal(err)
 		}
 
-		tmpsiteName := strings.Replace(site, ":", "", -1)
-		siteName := strings.Replace(tmpsiteName, "/", "_", -1)
+		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+		if err != nil {
+			log.Fatal(err)
+		}
+		siteName := reg.ReplaceAllString(site, "")
 
-		targetDir := filepath.Join(cwd, siteName)
-		targetPath := filepath.Join(targetDir, outputFile)
+		targetDir := filepath.Join(cwd, "output", siteName)
+		targetFilePath := filepath.Join(targetDir, outputFile)
 
-		if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-			os.Mkdir(targetDir, os.ModeDir)
+		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+			os.MkdirAll(targetDir, os.ModePerm)
 		}
 
-		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetPath)
+		if _, err := os.Stat(targetFilePath); os.IsNotExist(err) {
+			dataFile, err := os.Create(targetFilePath)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer dataFile.Close()
+
+			l, err := dataFile.WriteString(respData)
+			fmt.Println(l)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+
+		}
+
+		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFilePath)
 
 	}
 }
