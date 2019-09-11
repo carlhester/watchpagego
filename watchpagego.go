@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 func linesInFile(fileName string) []string {
@@ -68,6 +69,7 @@ func checkError(err error) {
 }
 
 func validateSiteFormat(site string) error {
+	// confirms we're dealing with a real URL and dies if not
 	_, err := url.ParseRequestURI(site)
 	if err != nil {
 		fmt.Printf("\n\nBailing out: %s is not formatted correctly\n\n", site)
@@ -77,48 +79,53 @@ func validateSiteFormat(site string) error {
 }
 
 func sanitizeSiteName(site string) (string, error) {
+	// get rid of extraneous characters
 	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 	checkError(err)
 	siteName := reg.ReplaceAllString(site, "")
 	return siteName, nil
 }
 
+func doTheWork(site string) {
+	err := validateSiteFormat(site)
+	checkError(err)
+
+	siteName, err := sanitizeSiteName(site)
+	strCode, respData, err := getRespCodeAndSiteData(site)
+	hashedData := getHashFromData(respData)
+	outputFile := strCode + "_" + hashedData
+
+	cwd, err := os.Getwd()
+	checkError(err)
+
+	targetDir := filepath.Join(cwd, "output", siteName)
+	targetFile := filepath.Join(targetDir, outputFile)
+
+	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+		os.MkdirAll(targetDir, os.ModePerm)
+	}
+
+	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
+		fmt.Printf("File does not exist; creating: %s\n", targetFile)
+		dataFile, err := os.Create(targetFile)
+		checkError(err)
+		defer dataFile.Close()
+
+		bytesWritten, err := dataFile.WriteString(respData)
+		fmt.Println(bytesWritten)
+		checkError(err)
+	} else {
+		fmt.Printf("File DOES exist: %s\n", targetFile)
+	}
+
+	//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFile)
+}
+
 func main() {
 	fileName := `list`
-
 	for _, site := range linesInFile(fileName) {
-		err := validateSiteFormat(site)
-		checkError(err)
-
-		siteName, err := sanitizeSiteName(site)
-		strCode, respData, err := getRespCodeAndSiteData(site)
-		hashedData := getHashFromData(respData)
-		outputFile := strCode + "_" + hashedData
-
-		cwd, err := os.Getwd()
-		checkError(err)
-
-		targetDir := filepath.Join(cwd, "output", siteName)
-		targetFile := filepath.Join(targetDir, outputFile)
-
-		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
-			os.MkdirAll(targetDir, os.ModePerm)
-		}
-
-		if _, err := os.Stat(targetFile); os.IsNotExist(err) {
-			fmt.Printf("File does not exist; creating: %s\n", targetFile)
-			dataFile, err := os.Create(targetFile)
-			checkError(err)
-			defer dataFile.Close()
-
-			bytesWritten, err := dataFile.WriteString(respData)
-			fmt.Println(bytesWritten)
-			checkError(err)
-		} else {
-			fmt.Printf("File DOES exist: %s\n", targetFile)
-		}
-
-		//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFile)
-
+		go doTheWork(site)
 	}
+	// this is here so the program doesn't exit right away
+	time.Sleep(1 * time.Second)
 }
