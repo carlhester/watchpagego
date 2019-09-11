@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -86,7 +87,8 @@ func sanitizeSiteName(site string) (string, error) {
 	return siteName, nil
 }
 
-func doTheWork(site string) {
+func doTheWork(site string, channel chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	err := validateSiteFormat(site)
 	checkError(err)
 
@@ -111,9 +113,11 @@ func doTheWork(site string) {
 		checkError(err)
 		defer dataFile.Close()
 
+		// can i skip this from returning anything if no error?
 		bytesWritten, err := dataFile.WriteString(respData)
 		fmt.Println(bytesWritten)
 		checkError(err)
+		channel <- site
 	} else {
 		fmt.Printf("File DOES exist: %s\n", targetFile)
 	}
@@ -123,9 +127,21 @@ func doTheWork(site string) {
 
 func main() {
 	fileName := `list`
+
+	var wg sync.WaitGroup
+
+	channel := make(chan string)
 	for _, site := range linesInFile(fileName) {
-		go doTheWork(site)
+		wg.Add(1)
+		go doTheWork(site, channel, &wg)
 	}
+	wg.Wait()
+	close(channel)
+
+	for item := range channel {
+		fmt.Println(item)
+	}
+
 	// this is here so the program doesn't exit right away
 	time.Sleep(1 * time.Second)
 }
