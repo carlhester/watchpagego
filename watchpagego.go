@@ -2,19 +2,18 @@ package main
 
 import (
 	"bufio"
-	"fmt"
-	//"io"
 	"crypto/md5"
 	"crypto/tls"
 	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
-	//"strings"
 )
 
 func linesInFile(fileName string) []string {
@@ -35,83 +34,91 @@ func linesInFile(fileName string) []string {
 	return result
 }
 
-func getRespCodeAndSiteData(site string) (string, string) {
+func getRespCodeAndSiteData(site string) (string, string, error) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	// Fetches a site and returns response code and data
+	// Fetches a site and returns response code and data as strings
 	response, err := http.Get(site)
 	if err != nil {
 		log.Fatal(err)
+		panic(err)
 	}
 	defer response.Body.Close()
 
 	httpResponseData, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	respCode := int(response.StatusCode)
 	strCode := strconv.Itoa(respCode)
 	respData := string(httpResponseData)
-	return strCode, respData
+	return strCode, respData, nil
 }
 
 func getHashFromData(text string) string {
-	// take text get hash
+	// take text return hash
 	h := md5.New()
 	h.Write([]byte(text))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
 func checkError(err error) {
+	// no idea if this works the way i think
 	if err != nil {
 		log.Fatal(err)
+		panic(err)
 	}
+}
 
+func validateSiteFormat(site string) error {
+	_, err := url.ParseRequestURI(site)
+	if err != nil {
+		fmt.Printf("\n\nBailing out: %s is not formatted correctly\n\n", site)
+		panic(err)
+	}
+	return nil
+}
+
+func sanitizeSiteName(site string) (string, error) {
+	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+	checkError(err)
+	siteName := reg.ReplaceAllString(site, "")
+	return siteName, nil
 }
 
 func main() {
 	fileName := `list`
 
 	for _, site := range linesInFile(fileName) {
-		strCode, respData := getRespCodeAndSiteData(site)
+		err := validateSiteFormat(site)
+		checkError(err)
+
+		siteName, err := sanitizeSiteName(site)
+		strCode, respData, err := getRespCodeAndSiteData(site)
 		hashedData := getHashFromData(respData)
 		outputFile := strCode + "_" + hashedData
 
 		cwd, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
-		if err != nil {
-			log.Fatal(err)
-		}
-		siteName := reg.ReplaceAllString(site, "")
+		checkError(err)
 
 		targetDir := filepath.Join(cwd, "output", siteName)
-		targetFilePath := filepath.Join(targetDir, outputFile)
+		targetFile := filepath.Join(targetDir, outputFile)
 
 		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 			os.MkdirAll(targetDir, os.ModePerm)
 		}
 
-		if _, err := os.Stat(targetFilePath); os.IsNotExist(err) {
-			dataFile, err := os.Create(targetFilePath)
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
+		if _, err := os.Stat(targetFile); os.IsNotExist(err) {
+			fmt.Printf("File does not exist; creating: %s\n", targetFile)
+			dataFile, err := os.Create(targetFile)
+			checkError(err)
 			defer dataFile.Close()
 
-			l, err := dataFile.WriteString(respData)
-			fmt.Println(l)
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
-
+			bytesWritten, err := dataFile.WriteString(respData)
+			fmt.Println(bytesWritten)
+			checkError(err)
+		} else {
+			fmt.Printf("File DOES exist: %s\n", targetFile)
 		}
 
-		//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFilePath)
+		//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFile)
 
 	}
 }
