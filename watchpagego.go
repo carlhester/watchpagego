@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -87,14 +88,14 @@ func sanitizeSiteName(site string) (string, error) {
 	return siteName, nil
 }
 
-func doTheWork(site string, channel chan string, wg *sync.WaitGroup) {
+func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan string, wg *sync.WaitGroup) {
 	// make sure the entry looks like a url
-	err := validateSiteFormat(site)
+	err := validateSiteFormat(siteToCheck)
 	checkError(err)
 
 	// get a filename safe version of the site
-	siteName, err := sanitizeSiteName(site)
-	strCode, respData, err := getRespCodeAndSiteData(site)
+	siteName, err := sanitizeSiteName(siteToCheck)
+	strCode, respData, err := getRespCodeAndSiteData(siteToCheck)
 	hashedData := getHashFromData(respData)
 	outputFile := strCode + "_" + hashedData
 
@@ -111,7 +112,7 @@ func doTheWork(site string, channel chan string, wg *sync.WaitGroup) {
 
 	// if the output file doesnt exist, create it and make noise
 	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
-		fmt.Printf("Changed! : %s : %s\n", site, targetFile)
+		fmt.Printf("Changed! : %s : %s\n", siteToCheck, targetFile)
 		dataFile, err := os.Create(targetFile)
 		checkError(err)
 
@@ -120,9 +121,9 @@ func doTheWork(site string, channel chan string, wg *sync.WaitGroup) {
 		checkError(err)
 		dataFile.Close()
 		fmt.Println(bytesWritten)
-		channel <- site
+		resultsChannel <- siteToCheck
 	} else {
-		fmt.Printf("No change: %s\n", site)
+		fmt.Printf("No change: %s\n", siteToCheck)
 	}
 
 	//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFile)
@@ -138,11 +139,15 @@ func main() {
 	// buffered channel with 1000 slots.
 	// not efficient for what we're doing, but unsure best way to find the size of our input list to best measure this
 	// with this approach, if the channel is full, we're going to block and hang
-	channel := make(chan string, 1000)
-	for _, site := range linesInFile(fileName) {
+	resultsChannel := make(chan string, 1000)
+	for _, line := range linesInFile(fileName) {
+		line := strings.Split(line, ",")
+		siteToCheck := line[0]
+		identifierToCheck := line[1]
+		fmt.Printf("Checking : %s.  Identifier : %s.\n", siteToCheck, identifierToCheck)
+
 		wg.Add(1)
-		fmt.Printf("Checking : %s\n", site)
-		go doTheWork(site, channel, &wg)
+		go doTheWork(siteToCheck, identifierToCheck, resultsChannel, &wg)
 	}
 
 	// anonymous function / closure that won't close the channel until Wait is resolved
@@ -154,9 +159,9 @@ func main() {
 	//}()
 
 	wg.Wait()
-	close(channel)
+	close(resultsChannel)
 
-	for item := range channel {
+	for item := range resultsChannel {
 		fmt.Println(item)
 	}
 
