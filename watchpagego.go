@@ -88,41 +88,46 @@ func sanitizeSiteName(site string) (string, error) {
 }
 
 func doTheWork(site string, channel chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
+	// make sure the entry looks like a url
 	err := validateSiteFormat(site)
 	checkError(err)
 
+	// get a filename safe version of the site
 	siteName, err := sanitizeSiteName(site)
 	strCode, respData, err := getRespCodeAndSiteData(site)
 	hashedData := getHashFromData(respData)
 	outputFile := strCode + "_" + hashedData
 
+	// determine output filename and path
 	cwd, err := os.Getwd()
 	checkError(err)
-
 	targetDir := filepath.Join(cwd, "output", siteName)
 	targetFile := filepath.Join(targetDir, outputFile)
 
+	// if the output path doesn't exist, make the path
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 		os.MkdirAll(targetDir, os.ModePerm)
 	}
 
+	// if the output file doesnt exist, create it and make noise
 	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
-		fmt.Printf("File does not exist; creating: %s\n", targetFile)
+		fmt.Printf("Changed! : %s : %s\n", site, targetFile)
 		dataFile, err := os.Create(targetFile)
 		checkError(err)
-		defer dataFile.Close()
 
 		// can i skip this from returning anything if no error?
 		bytesWritten, err := dataFile.WriteString(respData)
-		fmt.Println(bytesWritten)
 		checkError(err)
+		dataFile.Close()
+		fmt.Println(bytesWritten)
 		channel <- site
 	} else {
-		fmt.Printf("File DOES exist: %s\n", targetFile)
+		fmt.Printf("No change: %s\n", site)
 	}
 
 	//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFile)
+	wg.Done()
+	return
 }
 
 func main() {
@@ -133,13 +138,20 @@ func main() {
 	channel := make(chan string)
 	for _, site := range linesInFile(fileName) {
 		wg.Add(1)
+		fmt.Printf("Checking : %s\n", site)
 		go doTheWork(site, channel, &wg)
 	}
-	wg.Wait()
-	close(channel)
+
+	// anonymous function / closure that won't close the channel until Wait is resolved
+	// wait will not get resolved until all of the wg.Done are finished
+	go func() {
+		wg.Wait()
+		close(channel)
+	}()
 
 	for item := range channel {
 		fmt.Println(item)
+		fmt.Println(".")
 	}
 
 	// this is here so the program doesn't exit right away
