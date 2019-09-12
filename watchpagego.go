@@ -135,7 +135,10 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	channel := make(chan string)
+	// buffered channel with 1000 slots.
+	// not efficient for what we're doing, but unsure best way to find the size of our input list to best measure this
+	// with this approach, if the channel is full, we're going to block and hang
+	channel := make(chan string, 1000)
 	for _, site := range linesInFile(fileName) {
 		wg.Add(1)
 		fmt.Printf("Checking : %s\n", site)
@@ -144,14 +147,17 @@ func main() {
 
 	// anonymous function / closure that won't close the channel until Wait is resolved
 	// wait will not get resolved until all of the wg.Done are finished
-	go func() {
-		wg.Wait()
-		close(channel)
-	}()
+	// instead of making a buffered channel
+	//go func() {
+	//	wg.Wait()
+	//	close(channel)
+	//}()
+
+	wg.Wait()
+	close(channel)
 
 	for item := range channel {
 		fmt.Println(item)
-		fmt.Println(".")
 	}
 
 	// this is here so the program doesn't exit right away
