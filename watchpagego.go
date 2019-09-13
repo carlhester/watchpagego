@@ -93,7 +93,7 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 	err := validateSiteFormat(siteToCheck)
 	checkError(err)
 
-	// get a filename safe version of the site
+	// get the data from the site and set a filesystem-safe name
 	siteName, err := sanitizeSiteName(siteToCheck)
 	strCode, respData, err := getRespCodeAndSiteData(siteToCheck)
 	hashedData := getHashFromData(respData)
@@ -126,7 +126,6 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 		fmt.Printf("No change: %s\n", siteToCheck)
 	}
 
-	//		fmt.Printf("%d\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", respCode, strCode, hashedData, outputFile, cwd, targetDir, targetFile)
 	wg.Done()
 	return
 }
