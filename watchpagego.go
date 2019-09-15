@@ -6,7 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"github.com/PuerkitoBio/goquery"
+	//"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -37,7 +38,7 @@ func linesInFile(fileName string) []string {
 	return result
 }
 
-func getRespCodeAndSiteData(site string) (string, string, error) {
+func getRespCodeAndSiteData(site string, identifier string) (string, string, error) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	// Fetches a site and returns response code and data as strings
 	response, err := http.Get(site)
@@ -47,11 +48,16 @@ func getRespCodeAndSiteData(site string) (string, string, error) {
 	}
 	defer response.Body.Close()
 
-	httpResponseData, err := ioutil.ReadAll(response.Body)
+	//httpResponseData, err := ioutil.ReadAll(response.Body)
+	httpResponseData, err := goquery.NewDocumentFromReader(response.Body)
 	checkError(err)
+
+	extractedResponseData, err := httpResponseData.Find(identifier).Html()
+	checkError(err)
+
 	respCode := int(response.StatusCode)
 	strCode := strconv.Itoa(respCode)
-	respData := string(httpResponseData)
+	respData := string(extractedResponseData)
 	return strCode, respData, nil
 }
 
@@ -88,6 +94,14 @@ func sanitizeSiteName(site string) (string, error) {
 	return siteName, nil
 }
 
+func getOutputTargetDirAndFile(siteName string, outputFile string) (string, string, error) {
+	cwd, err := os.Getwd()
+	checkError(err)
+	targetDir := filepath.Join(cwd, "output", siteName)
+	targetFile := filepath.Join(targetDir, outputFile)
+	return targetDir, targetFile, nil
+}
+
 func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan string, wg *sync.WaitGroup) {
 	// make sure the entry looks like a url
 	err := validateSiteFormat(siteToCheck)
@@ -95,15 +109,13 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 
 	// get the data from the site and set a filesystem-safe name
 	siteName, err := sanitizeSiteName(siteToCheck)
-	strCode, respData, err := getRespCodeAndSiteData(siteToCheck)
+	strCode, respData, err := getRespCodeAndSiteData(siteToCheck, identifierToCheck)
 	hashedData := getHashFromData(respData)
 	outputFile := strCode + "_" + hashedData
 
-	// determine output filename and path
-	cwd, err := os.Getwd()
+	// determine output target filename and path
+	targetDir, targetFile, err := getOutputTargetDirAndFile(siteName, outputFile)
 	checkError(err)
-	targetDir := filepath.Join(cwd, "output", siteName)
-	targetFile := filepath.Join(targetDir, outputFile)
 
 	// if the output path doesn't exist, make the path
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
@@ -120,7 +132,11 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 		bytesWritten, err := dataFile.WriteString(respData)
 		checkError(err)
 		dataFile.Close()
-		fmt.Println(bytesWritten)
+
+		if bytesWritten == 0 {
+			fmt.Println(bytesWritten)
+		}
+
 		resultsChannel <- siteToCheck
 	} else {
 		fmt.Printf("No change: %s\n", siteToCheck)
@@ -143,7 +159,7 @@ func main() {
 		line := strings.Split(line, ",")
 		siteToCheck := line[0]
 		identifierToCheck := line[1]
-		fmt.Printf("Checking : %s.  Identifier : %s.\n", siteToCheck, identifierToCheck)
+		fmt.Printf("Checking : %s  Identifier : %s\n", siteToCheck, identifierToCheck)
 
 		wg.Add(1)
 		go doTheWork(siteToCheck, identifierToCheck, resultsChannel, &wg)
