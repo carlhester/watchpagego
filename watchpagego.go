@@ -20,6 +20,46 @@ import (
 	"time"
 )
 
+const userAgent = "github.com/crucialcarl/watchpagego"
+
+func main() {
+	fileName := `list`
+
+	var wg sync.WaitGroup
+
+	// buffered channel with 1000 slots.
+	// not efficient for what we're doing, but unsure best way to find the size of our input list to best measure this
+	// with this approach, if the channel is full, we're going to block and hang
+	resultsChannel := make(chan string, 1000)
+	for _, line := range linesInFile(fileName) {
+		line := strings.Split(line, ",")
+		siteToCheck := line[0]
+		identifierToCheck := line[1]
+		fmt.Printf("Checking : %s  Identifier : %s\n", siteToCheck, identifierToCheck)
+
+		wg.Add(1)
+		go doTheWork(siteToCheck, identifierToCheck, resultsChannel, &wg)
+	}
+
+	// anonymous function / closure that won't close the channel until Wait is resolved
+	// wait will not get resolved until all of the wg.Done are finished
+	// instead of making a buffered channel
+	//go func() {
+	//	wg.Wait()
+	//	close(channel)
+	//}()
+
+	wg.Wait()
+	close(resultsChannel)
+
+	for item := range resultsChannel {
+		fmt.Println(item)
+	}
+
+	// this is here so the program doesn't exit right away
+	time.Sleep(1 * time.Second)
+}
+
 func linesInFile(fileName string) []string {
 	// Reads and returns lines from fileName
 	file, err := os.Open(fileName)
@@ -40,12 +80,21 @@ func linesInFile(fileName string) []string {
 
 func getRespCodeAndSiteData(site string, identifier string) (string, string, error) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	httpClient := &http.Client{}
+
 	// Fetches a site and returns response code and data as strings
-	response, err := http.Get(site)
+	request, err := http.NewRequest("GET", site, nil)
 	if err != nil {
 		log.Fatal(err)
 		panic(err)
 	}
+	request.Header.Set("User-Agent", userAgent)
+	response, err := httpClient.Do(request)
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+
 	defer response.Body.Close()
 
 	//httpResponseData, err := ioutil.ReadAll(response.Body)
@@ -144,42 +193,4 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 
 	wg.Done()
 	return
-}
-
-func main() {
-	fileName := `list`
-
-	var wg sync.WaitGroup
-
-	// buffered channel with 1000 slots.
-	// not efficient for what we're doing, but unsure best way to find the size of our input list to best measure this
-	// with this approach, if the channel is full, we're going to block and hang
-	resultsChannel := make(chan string, 1000)
-	for _, line := range linesInFile(fileName) {
-		line := strings.Split(line, ",")
-		siteToCheck := line[0]
-		identifierToCheck := line[1]
-		fmt.Printf("Checking : %s  Identifier : %s\n", siteToCheck, identifierToCheck)
-
-		wg.Add(1)
-		go doTheWork(siteToCheck, identifierToCheck, resultsChannel, &wg)
-	}
-
-	// anonymous function / closure that won't close the channel until Wait is resolved
-	// wait will not get resolved until all of the wg.Done are finished
-	// instead of making a buffered channel
-	//go func() {
-	//	wg.Wait()
-	//	close(channel)
-	//}()
-
-	wg.Wait()
-	close(resultsChannel)
-
-	for item := range resultsChannel {
-		fmt.Println(item)
-	}
-
-	// this is here so the program doesn't exit right away
-	time.Sleep(1 * time.Second)
 }

@@ -1,6 +1,6 @@
-Add user agent
-split list input into site and identifier
-Determine html parsing
+[x] Add user agent
+[x] split list input into site and identifier
+[x] Determine html parsing
 Set up email alerting
 
 
