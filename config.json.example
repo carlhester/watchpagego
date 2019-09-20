@@ -1,0 +1,8 @@
+{
+    "NotifyEmail": "notice@gmail.com",
+    "SenderEmail": "sender@gmail.com",
+    "Password": "emailpass",
+    "Server": "smtp.gmail.com",
+    "Port": "587",
+    "Subject": "[Watchpage] Site Changed"
+}

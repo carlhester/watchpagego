@@ -18,9 +18,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"watchpagego/utils"
 )
 
-const userAgent = "github.com/crucialcarl/watchpagego"
+const userAgent = "watchpagego"
 
 func main() {
 	fileName := `list`
@@ -28,21 +29,23 @@ func main() {
 	var wg sync.WaitGroup
 
 	// buffered channel with 1000 slots.
-	// not efficient for what we're doing, but unsure best way to find the size of our input list to best measure this
-	// with this approach, if the channel is full, we're going to block and hang
-	resultsChannel := make(chan string, 1000)
+	// not efficient for what we're doing, but unsure best way to find the size of
+	// our input list to best measure this with this approach, if the channel is
+	// full, we're going to block and hang
+
+	resultsChannel := make(chan [2]string, 1000)
 	for _, line := range linesInFile(fileName) {
 		line := strings.Split(line, ",")
 		siteToCheck := line[0]
 		identifierToCheck := line[1]
-		fmt.Printf("Checking : %s  Identifier : %s\n", siteToCheck, identifierToCheck)
+		//		fmt.Printf("Checking : %s  Identifier : %s\n", siteToCheck, identifierToCheck)
 
 		wg.Add(1)
 		go doTheWork(siteToCheck, identifierToCheck, resultsChannel, &wg)
 	}
 
-	// anonymous function / closure that won't close the channel until Wait is resolved
-	// wait will not get resolved until all of the wg.Done are finished
+	// anonymous function / closure that won't close the channel until Wait is
+	// resolved  wait will not get resolved until all of the wg.Done are finished
 	// instead of making a buffered channel
 	//go func() {
 	//	wg.Wait()
@@ -52,10 +55,14 @@ func main() {
 	wg.Wait()
 	close(resultsChannel)
 
+	var resultsToSend string
 	for item := range resultsChannel {
 		fmt.Println(item)
+		resultsToSend += item[0] + "\t"
+		resultsToSend += item[1] + "\r\n"
 	}
 
+	utils.EmailResults(resultsToSend)
 	// this is here so the program doesn't exit right away
 	time.Sleep(1 * time.Second)
 }
@@ -151,7 +158,7 @@ func getOutputTargetDirAndFile(siteName string, outputFile string) (string, stri
 	return targetDir, targetFile, nil
 }
 
-func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan string, wg *sync.WaitGroup) {
+func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan [2]string, wg *sync.WaitGroup) {
 	// make sure the entry looks like a url
 	err := validateSiteFormat(siteToCheck)
 	checkError(err)
@@ -173,7 +180,7 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 
 	// if the output file doesnt exist, create it and make noise
 	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
-		fmt.Printf("Changed! : %s : %s\n", siteToCheck, targetFile)
+		//fmt.Printf("Changed! : %s : %s\n", siteToCheck, targetFile)
 		dataFile, err := os.Create(targetFile)
 		checkError(err)
 
@@ -185,10 +192,9 @@ func doTheWork(siteToCheck string, identifierToCheck string, resultsChannel chan
 		if bytesWritten == 0 {
 			fmt.Println(bytesWritten)
 		}
+		results := [2]string{siteToCheck, targetFile}
 
-		resultsChannel <- siteToCheck
-	} else {
-		fmt.Printf("No change: %s\n", siteToCheck)
+		resultsChannel <- results
 	}
 
 	wg.Done()
