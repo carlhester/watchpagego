@@ -1,7 +1,6 @@
 [x] Add user agent
 [x] split list input into site and identifier
 [x] Determine html parsing
-Set up email alerting
-
-
-
+[x] Set up email alerting
+[ ] gracefully handle bad urls
+[ ] gracefully handle timeouts or connection errors

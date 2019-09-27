@@ -55,16 +55,26 @@ func main() {
 	wg.Wait()
 	close(resultsChannel)
 
+	sendIfNewResults(resultsChannel)
+
+	// this is here so the program doesn't exit right away
+	time.Sleep(1 * time.Second)
+}
+
+func sendIfNewResults(resultsChannel chan [2]string) {
 	var resultsToSend string
+	var numNewResults int
 	for item := range resultsChannel {
+		numNewResults += 1
 		fmt.Println(item)
 		resultsToSend += item[0] + "\t"
 		resultsToSend += item[1] + "\r\n"
 	}
 
-	utils.EmailResults(resultsToSend)
-	// this is here so the program doesn't exit right away
-	time.Sleep(1 * time.Second)
+	if numNewResults != 0 {
+		utils.EmailResults(resultsToSend)
+	}
+	return
 }
 
 func linesInFile(fileName string) []string {
