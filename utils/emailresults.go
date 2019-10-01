@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/smtp"
 	"os"
 )
@@ -16,7 +15,7 @@ type Configuration struct {
 	Subject     string
 }
 
-func EmailResults(content string) {
+func EmailResults(content string) error {
 	file, _ := os.Open("config.json")
 	defer file.Close()
 
@@ -24,7 +23,7 @@ func EmailResults(content string) {
 	config := Configuration{}
 	err := decoder.Decode(&config)
 	if err != nil {
-		fmt.Println("error:", err)
+		return err
 	}
 
 	from := config.SenderEmail
@@ -44,10 +43,8 @@ func EmailResults(content string) {
 
 	err = smtp.SendMail(config.Server+":"+config.Port, auth, from, to, message)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
 
-	fmt.Println("Email Sent!")
-
+	return nil
 }
